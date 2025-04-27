@@ -1,0 +1,62 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "clinc150",
+  "dataset_size": 1305945,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/DeepPavlov/clinc150@fdc52039c5e2557da3511c8319a409ad1aa22909/data/train-00000-of-00001.parquet": {
+      "num_bytes": 343838,
+      "checksum": null
+    },
+    "hf://datasets/DeepPavlov/clinc150@fdc52039c5e2557da3511c8319a409ad1aa22909/data/validation-00000-of-00001.parquet": {
+      "num_bytes": 70780,
+      "checksum": null
+    },
+    "hf://datasets/DeepPavlov/clinc150@fdc52039c5e2557da3511c8319a409ad1aa22909/data/test-00000-of-00001.parquet": {
+      "num_bytes": 127966,
+      "checksum": null
+    }
+  },
+  "download_size": 542584,
+  "features": {
+    "utterance": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "label": {
+      "dtype": "int64",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 1848529,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 857605,
+      "num_examples": 15200,
+      "dataset_name": "clinc150"
+    },
+    "validation": {
+      "name": "validation",
+      "num_bytes": 160686,
+      "num_examples": 3100,
+      "dataset_name": "clinc150"
+    },
+    "test": {
+      "name": "test",
+      "num_bytes": 287654,
+      "num_examples": 5500,
+      "dataset_name": "clinc150"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

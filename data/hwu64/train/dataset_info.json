@@ -1,0 +1,52 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "hwu64",
+  "dataset_size": 457585,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/DeepPavlov/hwu64@370c7e7e6d295f03324b60ea12c381a7e61cf89e/data/train-00000-of-00001.parquet": {
+      "num_bytes": 173154,
+      "checksum": null
+    },
+    "hf://datasets/DeepPavlov/hwu64@370c7e7e6d295f03324b60ea12c381a7e61cf89e/data/test-00000-of-00001.parquet": {
+      "num_bytes": 26342,
+      "checksum": null
+    }
+  },
+  "download_size": 199496,
+  "features": {
+    "utterance": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "label": {
+      "dtype": "int64",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 657081,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 407905,
+      "num_examples": 8954,
+      "dataset_name": "hwu64"
+    },
+    "test": {
+      "name": "test",
+      "num_bytes": 49680,
+      "num_examples": 1076,
+      "dataset_name": "hwu64"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

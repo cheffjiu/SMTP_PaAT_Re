@@ -183,9 +183,9 @@ def merge_datasets(
 
 
 # 加载数据集
-def loader_dataset(args, tokenizer_name) -> Dataset:
+def loader_dataset(datasetname, tokenizer_name) -> Dataset:
     datasets = []
-    for name in args.dataname:
+    for name in datasetname:
         path = f"data/{name}/train.csv"
         try:
             dataset = load_dataset("csv", data_files=path)["train"]

@@ -100,6 +100,7 @@ class SMTPBert(nn.Module):
             # 总损失
             total_loss: torch.Tensor = mlm_loss + contrastive_loss
             return total_loss
+
         except Exception as e:
             print(f"前向传播时出错: {e}")
             raise

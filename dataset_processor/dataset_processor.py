@@ -150,9 +150,32 @@ class DatasetProcessor:
             f"{output_path}/{split}.csv", index=False
         )
 
+    def _merge_splits(self, input_path: str, output_path: str) -> None:
+        """
+        将数据集的各个划分（如训练集、测试集、验证集）合并为一个整体数据集。
+        :param input_path: 输入数据集的路径
+        :param output_path: 合并后数据集的保存路径
+        """
+        dataset = self.load_dataset("arrow", input_path)
+        if isinstance(dataset, DatasetDict):
+            combined_data = {}
+            for split in dataset:
+                for col in dataset[split].column_names:
+                    if col not in combined_data:
+                        combined_data[col] = []
+                    combined_data[col].extend(dataset[split][col])
+            combined_dataset = Dataset.from_dict(combined_data)
+        else:
+            combined_dataset = dataset
+
+        combined_dataset = self._rename_features(combined_dataset)
+        self._save_local(combined_dataset, output_path)
+        logging.info(f"数据集已合并并保存至 {output_path}")
+
 
 if __name__ == "__main__":
     processor = DatasetProcessor()
+
     # 数据集下载
     # download_liu57()
     banking77 = load_dataset("PolyAI/banking77")
@@ -161,11 +184,18 @@ if __name__ == "__main__":
     hwu64.save_to_disk("data/hwu64")
     clincl150 = load_dataset("DeepPavlov/clinc150")
     clincl150.save_to_disk("data/clinc150")
+
+    # 数据集合并
+    processor._merge_splits("data/hwu64/", "data/hwu64_merge")
+    processor._merge_splits("data/clinc150/", "data/clinc150_merge")
+    processor._merge_splits("data/banking77/", "data/banking77_merge")
     # 格式转换
-    processor.convert_format("hwu64", "data/hwu64/", "data/hwu64_csv", "arrow_to_csv")
     processor.convert_format(
-        "banking77", "data/banking77", "data/banking77_csv", "arrow_to_csv"
+        "hwu64", "data/hwu64_merge/", "data/hwu64_csv", "arrow_to_csv"
     )
     processor.convert_format(
-        "clinc150", "data/clinc150", "data/clinc150_csv", "arrow_to_csv"
+        "banking77", "data/banking77_merge", "data/banking77_csv", "arrow_to_csv"
+    )
+    processor.convert_format(
+        "clinc150", "data/clinc150_merge", "data/clinc150_csv", "arrow_to_csv"
     )

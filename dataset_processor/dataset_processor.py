@@ -4,6 +4,7 @@ import logging
 import subprocess
 from datasets import load_dataset, Dataset, DatasetDict, load_from_disk
 from typing import Dict, Optional, Union
+import random
 
 logging.basicConfig(level=logging.INFO)
 
@@ -51,7 +52,7 @@ class DatasetProcessor:
                     if os.path.exists(f"{path}/{split}.csv")
                 }
                 dataset: Union[DatasetDict, Dataset] = load_dataset(
-                    "csv", data_files=data_files
+                    "csv", data_files=path
                 )
                 logging.info(f"数据集加载完成(CSV):{path}")
                 return dataset
@@ -81,8 +82,80 @@ class DatasetProcessor:
             logging.error(f"格式转换失败: {e}")
             raise
 
+    def merge_splits(self, input_path: str, output_path: str) -> None:
+        """
+        将数据集的各个划分（如训练集、测试集、验证集）合并为一个整体数据集。
+        :param input_path: 输入数据集的路径
+        :param output_path: 合并后数据集的保存路径
+        """
+        dataset = self.load_dataset("arrow", input_path)
+        if isinstance(dataset, DatasetDict):
+            combined_data = {}
+            for split in dataset:
+                for col in dataset[split].column_names:
+                    if col not in combined_data:
+                        combined_data[col] = []
+                    combined_data[col].extend(dataset[split][col])
+            combined_dataset = Dataset.from_dict(combined_data)
+        else:
+            combined_dataset = dataset
+
+        combined_dataset = self._rename_features(combined_dataset)
+        self._save_local(combined_dataset, output_path)
+        logging.info(f"数据集已合并并保存至 {output_path}")
+
+    def split_meta_dataset(
+        self,
+        dataset: Dataset | DatasetDict,
+        test_size: float = 0.2,
+        save_path: Optional[str] = None,
+        random_seed: int = 42,
+    ) -> DatasetDict:
+        """
+        将数据集按label划分为元训练集和元测试集,保证两者label不相交。
+        :param dataset: 输入的数据集，可以是 Dataset 或 DatasetDict 类型
+        :param test_size: 元测试集的label比例,默认 0.2
+        :param save_path: 保存划分后数据集的路径，可选
+        :param random_seed: 随机种子，用于确保划分结果可复现，默认 42
+        :return: 包含元训练集和元测试集的 DatasetDict
+        """
+        if isinstance(dataset, DatasetDict):
+            # 如果是 DatasetDict，先合并所有划分
+            combined_data = {}
+            for split in dataset:
+                for col in dataset[split].column_names:
+                    if col not in combined_data:
+                        combined_data[col] = []
+                    combined_data[col].extend(dataset[split][col])
+            dataset = Dataset.from_dict(combined_data)
+
+        # 设置随机种子
+        random.seed(random_seed)
+
+        # 获取所有唯一的label
+        unique_labels = list(set(dataset["label"]))
+        # 打乱label顺序
+        random.shuffle(unique_labels)
+        # 计算元测试集的label数量
+        test_label_count = int(len(unique_labels) * test_size)
+        # 划分label
+        test_labels = unique_labels[:test_label_count]
+        train_labels = unique_labels[test_label_count:]
+
+        # 根据label划分数据集
+        meta_train = dataset.filter(lambda example: example["label"] in train_labels)
+        meta_test = dataset.filter(lambda example: example["label"] in test_labels)
+
+        meta_dataset = DatasetDict({"meta_train": meta_train, "meta_test": meta_test})
+
+        if save_path:
+            self._save_local(meta_dataset, save_path)
+            logging.info(f"元训练集和元测试集已保存至 {save_path}")
+
+        return meta_dataset
+
     # 以下是内部方法
-    def _save_local(self, dataset: DatasetDict, path: str) -> None:
+    def _save_local(self, dataset: Dataset | DatasetDict, path: str) -> None:
         """保存数据集到本地"""
         try:
             os.makedirs(path, exist_ok=True)
@@ -138,7 +211,7 @@ class DatasetProcessor:
 
     def _csv_to_arrow(self, input_path: str, output_path: str) -> None:
         """将CSV格式数据集转换为Arrow格式"""
-        dataset: Union[DatasetDict, Dataset] = self.load_dataset(input_path)
+        dataset: Union[DatasetDict, Dataset] = self.load_dataset("csv", input_path)
         os.makedirs(output_path, exist_ok=True)
         self._save_local(dataset, output_path)
 
@@ -149,28 +222,6 @@ class DatasetProcessor:
         pd.DataFrame({"text": texts, "label": labels}).to_csv(
             f"{output_path}/{split}.csv", index=False
         )
-
-    def _merge_splits(self, input_path: str, output_path: str) -> None:
-        """
-        将数据集的各个划分（如训练集、测试集、验证集）合并为一个整体数据集。
-        :param input_path: 输入数据集的路径
-        :param output_path: 合并后数据集的保存路径
-        """
-        dataset = self.load_dataset("arrow", input_path)
-        if isinstance(dataset, DatasetDict):
-            combined_data = {}
-            for split in dataset:
-                for col in dataset[split].column_names:
-                    if col not in combined_data:
-                        combined_data[col] = []
-                    combined_data[col].extend(dataset[split][col])
-            combined_dataset = Dataset.from_dict(combined_data)
-        else:
-            combined_dataset = dataset
-
-        combined_dataset = self._rename_features(combined_dataset)
-        self._save_local(combined_dataset, output_path)
-        logging.info(f"数据集已合并并保存至 {output_path}")
 
 
 if __name__ == "__main__":
@@ -186,9 +237,10 @@ if __name__ == "__main__":
     clincl150.save_to_disk("data/clinc150")
 
     # 数据集合并
-    processor._merge_splits("data/hwu64/", "data/hwu64_merge")
-    processor._merge_splits("data/clinc150/", "data/clinc150_merge")
-    processor._merge_splits("data/banking77/", "data/banking77_merge")
+    processor.merge_splits("data/hwu64", "data/hwu64_merge")
+    processor.merge_splits("data/clinc150", "data/clinc150_merge")
+    processor.merge_splits("data/banking77", "data/banking77_merge")
+
     # 格式转换
     processor.convert_format(
         "hwu64", "data/hwu64_merge/", "data/hwu64_csv", "arrow_to_csv"
@@ -198,4 +250,28 @@ if __name__ == "__main__":
     )
     processor.convert_format(
         "clinc150", "data/clinc150_merge", "data/clinc150_csv", "arrow_to_csv"
+    )
+    # 元训练集和元测试集划分
+    banking77_meta = processor.load_dataset("csv", "data/banking77_csv/banking77.csv")
+    processor.split_meta_dataset(
+        banking77_meta, save_path="data/banking77_meta", random_seed=42
+    )
+    processor.convert_format(
+        "banking77", "data/banking77_meta", "data/banking77_meta_csv", "arrow_to_csv"
+    )
+
+    clinc150_meta = processor.load_dataset("csv", "data/clinc150_csv/clinc150.csv")
+    processor.split_meta_dataset(
+        clinc150_meta, save_path="data/clinc150_meta", random_seed=42
+    )
+    processor.convert_format(
+        "clinc150", "data/clinc150_meta", "data/clinc150_meta_csv", "arrow_to_csv"
+    )
+
+    hwu64_meta = processor.load_dataset("csv", "data/hwu64_csv/hwu64.csv")
+    processor.split_meta_dataset(
+        hwu64_meta, save_path="data/hwu64_meta", random_seed=42
+    )
+    processor.convert_format(
+        "hwu64", "data/clinc150_meta", "data/clinc150_meta_csv", "arrow_to_csv"
     )

@@ -2,11 +2,13 @@ from transformers import Trainer, TrainerCallback
 import torch.optim as optim
 from transformers.optimization import get_linear_schedule_with_warmup
 import torch
+import torch.nn as nn
 
 
 class CustomTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
         # 检测当前使用的设备
         self.device = torch.device(
             "cuda"
@@ -14,6 +16,8 @@ class CustomTrainer(Trainer):
             else "mps" if torch.backends.mps.is_available() else "cpu"
         )
         print(f"Using device: {self.device}")
+        # 对比学习损失函数
+        self.cl_head_loss = nn.TripletMarginLoss(margin=1.0, p=2)
 
     def compute_loss(
         self, model, inputs, return_outputs=False, num_items_in_batch=None
@@ -40,7 +44,7 @@ class CustomTrainer(Trainer):
         input_ids_contrast3 = inputs.pop("input_ids_contrast3")
         attention_mask_contrast3 = inputs.pop("attention_mask_contrast3")
 
-        loss = model(
+        mlm_outputs, embeddings1, embeddings2, embeddings3 = model(
             input_ids_mlm,
             attention_mask_mlm,
             labels_mlm,
@@ -51,7 +55,15 @@ class CustomTrainer(Trainer):
             input_ids_contrast3,
             attention_mask_contrast3,
         )
-        return (loss, None) if return_outputs else loss
+        mlm_loss = mlm_outputs.loss
+        contrast_loss = self.cl_head_loss(embeddings1, embeddings2, embeddings3)
+        # 计算总损失
+        total_loss = mlm_loss + contrast_loss
+        return (
+            (total_loss, (mlm_outputs, embeddings1, embeddings2, embeddings3))
+            if return_outputs
+            else total_loss
+        )
 
     def create_optimizer(self):
         """

@@ -3,7 +3,6 @@ from model.smtp_bert_re import SMTPBert
 from dataset.smtp_dataset_loader_re import loader_dataset
 from trainer.smtp_trainer_re import CustomTrainer, CustomCallback
 
-
 # 主函数
 if __name__ == "__main__":
 
@@ -44,5 +43,6 @@ if __name__ == "__main__":
     )
     # 开始训练
     trainer.train()
+
     # 保存模型
     model.save_pretrained(training_args.output_dir)

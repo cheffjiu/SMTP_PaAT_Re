@@ -47,7 +47,7 @@ class SMTPBert(nn.Module):
         attention_mask_contrast2 (torch.Tensor): 对比学习的第二个注意力掩码。
         input_ids_contrast3 (torch.Tensor): 对比学习的第三个输入 ID。
         attention_mask_contrast3 (torch.Tensor): 对比学习的第三个注意力掩码。
-
+        #contrast1:original,contrast2:stopwords,contrast3:shuffled
         返回:
         torch.Tensor: 总损失。
         """
@@ -58,15 +58,18 @@ class SMTPBert(nn.Module):
                 attention_mask=attention_mask_mlm,
                 labels=labels_mlm,
             )
-            mlm_loss: torch.Tensor = mlm_outputs.loss
 
             # 提取对比学习所需的特征表示 (batch_size, sequence_length, hidden_size)
+
+            # 原始数据
             contrast_output1: torch.Tensor = self.base.bert(
                 input_ids=input_ids_contrast1, attention_mask=attention_mask_contrast1
             )
+            # 停用词替换数据
             contrast_output2: torch.Tensor = self.base.bert(
                 input_ids=input_ids_contrast2, attention_mask=attention_mask_contrast2
             )
+            # 随机打乱数据
             contrast_output3: torch.Tensor = self.base.bert(
                 input_ids=input_ids_contrast3, attention_mask=attention_mask_contrast3
             )
@@ -92,14 +95,7 @@ class SMTPBert(nn.Module):
             embeddings2: torch.Tensor = F.normalize(embeddings2, p=2, dim=1)
             embeddings3: torch.Tensor = F.normalize(embeddings3, p=2, dim=1)
 
-            # 计算对比损失，embeddings1 是锚点，embeddings2 是正样本，embeddings3 是负样本
-            contrastive_loss: torch.Tensor = self.cl_head_loss(
-                embeddings1, embeddings2, embeddings3
-            )
-
-            # 总损失
-            total_loss: torch.Tensor = mlm_loss + contrastive_loss
-            return total_loss
+            return mlm_outputs, embeddings1, embeddings2, embeddings3
 
         except Exception as e:
             print(f"前向传播时出错: {e}")

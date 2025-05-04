@@ -1,1 +1,1 @@
-{"splits": ["meta_train", "meta_test"]}
+{"splits": ["meta_train", "meta_val", "meta_test"]}

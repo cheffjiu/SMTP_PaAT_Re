@@ -3,7 +3,7 @@ import pandas as pd
 import logging
 import subprocess
 from datasets import load_dataset, Dataset, DatasetDict, load_from_disk
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Union, List
 import random
 
 logging.basicConfig(level=logging.INFO)
@@ -107,50 +107,65 @@ class DatasetProcessor:
     def split_meta_dataset(
         self,
         dataset: Dataset | DatasetDict,
-        test_size: float = 0.2,
+        val_size: float = 0.15,
+        test_size: float = 0.15,
         save_path: Optional[str] = None,
         random_seed: int = 42,
     ) -> DatasetDict:
         """
-        将数据集按label划分为元训练集和元测试集,保证两者label不相交。
+        将数据集按 label 划分为 meta-train、meta-val 和 meta-test,确保 label 不重叠。
+
         :param dataset: 输入的数据集，可以是 Dataset 或 DatasetDict 类型
-        :param test_size: 元测试集的label比例,默认 0.2
+        :param val_size: 元验证集的 label 比例，默认 0.15
+        :param test_size: 元测试集的 label 比例，默认 0.15
         :param save_path: 保存划分后数据集的路径，可选
         :param random_seed: 随机种子，用于确保划分结果可复现，默认 42
-        :return: 包含元训练集和元测试集的 DatasetDict
+        :return: 包含 meta-train、meta-val 和 meta-test 的 DatasetDict
         """
+
+        # 如果是 DatasetDict，先合并所有划分
         if isinstance(dataset, DatasetDict):
-            # 如果是 DatasetDict，先合并所有划分
-            combined_data = {}
-            for split in dataset:
-                for col in dataset[split].column_names:
-                    if col not in combined_data:
-                        combined_data[col] = []
-                    combined_data[col].extend(dataset[split][col])
-            dataset = Dataset.from_dict(combined_data)
+            combined_data: Dict[str, List] = {}
+        for split in dataset:
+            for col in dataset[split].column_names:
+                if col not in combined_data:
+                    combined_data[col] = []
+                combined_data[col].extend(dataset[split][col])
+        dataset = Dataset.from_dict(combined_data)
 
         # 设置随机种子
         random.seed(random_seed)
 
-        # 获取所有唯一的label
+        # 获取所有唯一的 label
         unique_labels = list(set(dataset["label"]))
-        # 打乱label顺序
-        random.shuffle(unique_labels)
-        # 计算元测试集的label数量
-        test_label_count = int(len(unique_labels) * test_size)
-        # 划分label
-        test_labels = unique_labels[:test_label_count]
-        train_labels = unique_labels[test_label_count:]
+        random.shuffle(unique_labels)  # 打乱顺序
 
-        # 根据label划分数据集
+        total = len(unique_labels)
+        test_count = int(total * test_size)
+        val_count = int(total * val_size)
+        train_count = total - test_count - val_count
+
+        # 划分 label
+        train_labels = unique_labels[:train_count]
+        val_labels = unique_labels[train_count : train_count + val_count]
+        test_labels = unique_labels[train_count + val_count :]
+
+        # 根据 label 过滤样本
         meta_train = dataset.filter(lambda example: example["label"] in train_labels)
+        meta_val = dataset.filter(lambda example: example["label"] in val_labels)
         meta_test = dataset.filter(lambda example: example["label"] in test_labels)
 
-        meta_dataset = DatasetDict({"meta_train": meta_train, "meta_test": meta_test})
+        meta_dataset: DatasetDict = DatasetDict(
+            {
+                "meta_train": meta_train,
+                "meta_val": meta_val,
+                "meta_test": meta_test,
+            }
+        )
 
         if save_path:
             self._save_local(meta_dataset, save_path)
-            logging.info(f"元训练集和元测试集已保存至 {save_path}")
+        logging.info(f"元训练集、元验证集和元测试集已保存至 {save_path}")
 
         return meta_dataset
 
@@ -229,12 +244,12 @@ if __name__ == "__main__":
 
     # 数据集下载
     # download_liu57()
-    banking77 = load_dataset("PolyAI/banking77")
-    banking77.save_to_disk("data/banking77")
-    hwu64 = load_dataset("DeepPavlov/hwu64")
-    hwu64.save_to_disk("data/hwu64")
-    clincl150 = load_dataset("DeepPavlov/clinc150")
-    clincl150.save_to_disk("data/clinc150")
+    # banking77 = load_dataset("PolyAI/banking77")
+    # banking77.save_to_disk("data/banking77")
+    # hwu64 = load_dataset("DeepPavlov/hwu64")
+    # hwu64.save_to_disk("data/hwu64")
+    # clincl150 = load_dataset("DeepPavlov/clinc150")
+    # clincl150.save_to_disk("data/clinc150")
 
     # 数据集合并
     processor.merge_splits("data/hwu64", "data/hwu64_merge")

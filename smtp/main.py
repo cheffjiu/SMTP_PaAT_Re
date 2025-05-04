@@ -45,4 +45,4 @@ if __name__ == "__main__":
     trainer.train()
 
     # 保存模型
-    model.save_pretrained(training_args.output_dir)
+    model.base.bert.save_pretrained(training_args.output_dir)

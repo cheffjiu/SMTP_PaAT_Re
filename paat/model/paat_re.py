@@ -45,7 +45,7 @@ class AdaptiveLayer(nn.Module):
 
 
 class PaATModel(nn.Module):
-    def __init__(self, pretrained_model_name: str, temp: float = 1.0):
+    def __init__(self, pretrained_model_name: str, N, K, Q, temp: float = 1.0):
         super().__init__()
         cfg = AutoConfig.from_pretrained(pretrained_model_name)
         self.encoder = AutoModel.from_pretrained(pretrained_model_name, config=cfg)
@@ -55,18 +55,27 @@ class PaATModel(nn.Module):
         self.pa = PaLayer(hidden_size)
         self.ad = AdaptiveLayer(hidden_size)
         self.temp = temp
+        self.N = N
+        self.K = K
+        self.Q = Q
 
-    def make_protos(self, support_seq, N, K):
+    def make_protos(self, support_seq):
         # support_seq: [N*K, L, hidden_size]
-        support_seq = support_seq.view(N, K, support_seq.size(1), support_seq.size(2))  # [N,K,L,hidden_size]
+        support_seq = support_seq.view(
+            self.N, self.K, support_seq.size(1), support_seq.size(2)
+        )  # [N,K,L,hidden_size]
         # inner-sent
-        x_sent = support_seq.view(N * K, support_seq.size(2), support_seq.size(3))  # [N*K,L,hidden_size]
-        I_sent = self.fiat(x_sent).view(N, K, support_seq.size(2), support_seq.size(3))
+        x_sent = support_seq.view(
+            self.N * self.K, support_seq.size(2), support_seq.size(3)
+        )  # [N*K,L,hidden_size]
+        I_sent = self.fiat(x_sent).view(
+            self.N, self.K, support_seq.size(2), support_seq.size(3)
+        )
         # inner-class
         x_cls = support_seq.permute(0, 2, 1, 3).reshape(
-            N * support_seq.size(2), K, support_seq.size(3)
+            self.N * support_seq.size(2), self.K, support_seq.size(3)
         )
-        I_cls = self.fiat(x_cls).view(N, support_seq.size(2), support_seq.size(3))
+        I_cls = self.fiat(x_cls).view(self.N, support_seq.size(2), support_seq.size(3))
         proto1 = 0.5 * (I_sent.mean(dim=1) + I_cls)  # [N,L,hidden_size]
         proto2 = self.pa(proto1)  # [N,L,hidden_size]
         return self.ad(proto2)  # [N,hidden_size]
@@ -76,11 +85,15 @@ class PaATModel(nn.Module):
         q_sent = self.fiat(qry_seq)  # [N*Q,L,hidden_size]
         return self.ad(q_sent)  # [N*Q,hidden_size]
 
-    def forward(self, support_input, support_mask, query_input, query_mask,labels ,N, K, Q):
-        support_input=support_input.squeeze(0)
-        support_mask=support_mask.squeeze(0)
-        query_input=query_input.squeeze(0)
-        query_mask=query_mask.squeeze(0)
+    def forward(
+        self, support_input, support_mask, query_input, query_mask, labels=None
+    ):
+        support_input = support_input.view(
+            -1, support_input.size(-1)
+        )  # [N*K, seq_length]
+        support_mask = support_mask.view(-1, support_mask.size(-1))  # [N*K, seq_length]
+        query_input = query_input.view(-1, query_input.size(-1))  # [N*Q, seq_length]
+        query_mask = query_mask.view(-1, query_mask.size(-1))  # [N*Q, seq_length]
         # 1) 编码
         sup = self.encoder(input_ids=support_input, attention_mask=support_mask)[0]
         qry = self.encoder(input_ids=query_input, attention_mask=query_mask)[0]
@@ -88,8 +101,8 @@ class PaATModel(nn.Module):
         sup1, sup2 = sup, self.dropout(sup)
         qry1, qry2 = qry, self.dropout(qry)
         # 3) 构造原型 & 查询向量
-        proto1 = self.make_protos(sup1, N, K)
-        proto2 = self.make_protos(sup2, N, K)
+        proto1 = self.make_protos(sup1)
+        proto2 = self.make_protos(sup2)
         xq1 = self.make_queries(qry1)
         xq2 = self.make_queries(qry2)
         # 4) logits

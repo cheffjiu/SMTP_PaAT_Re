@@ -23,8 +23,8 @@ class MetaFewShotDataset(Dataset):
         # 按 label 分桶
         self.buckets = {}
         for example in data:
-            text = example['text']
-            label = str(example['label'])
+            text = example["text"]
+            label = str(example["label"])
             self.buckets.setdefault(label, []).append(text)
         self.labels = list(self.buckets.keys())
         self.tokenizer = tokenizer
@@ -58,7 +58,7 @@ class MetaFewShotDataset(Dataset):
         query_texts = [t for t in query_texts if t.strip()]
 
         if not support_texts or not query_texts:
-            return self.__getitem__(random.randint(0, len(self)-1))
+            return self.__getitem__(random.randint(0, len(self) - 1))
 
         # 3) tokenizer 编码
         support = self.tokenizer(
@@ -81,10 +81,7 @@ class MetaFewShotDataset(Dataset):
             "support_mask": support.attention_mask,
             "query_input": query.input_ids,
             "query_mask": query.attention_mask,
-            "labels":torch.tensor(query_labels, dtype=torch.long),
-            "N": self.N,
-            "K": self.K,
-            "Q": self.Q,
+            "labels": torch.tensor(query_labels, dtype=torch.long),
         }
         return result
 
